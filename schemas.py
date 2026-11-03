@@ -11,7 +11,7 @@ class ChunkSchema(BaseModel):
     page_number: int | None = None
 
     class Config:
-        from_attributes = True
+        from_attributes = True #Bu ayar, veritabanından gelen karmaşık ORM nesnelerini alıp frontend'in anlayacağı JSON formatına çevirmekle görevlidir. Pydantic'e "Sana sözlük değil, veritabanı nesnesi vereceğim, onu oku" demek için , DB den Frontend'e veri aktarımında kullanılır. Bu sayede, veritabanı modelleri ile Pydantic şemaları arasında sorunsuz bir dönüşüm sağlanır. 
 
 # --- 2. DOKÜMAN İŞLEMLERİ ŞEMALARI ---
 class DocumentCreate(BaseModel):

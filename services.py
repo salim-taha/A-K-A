@@ -4,11 +4,11 @@ from langchain_openai import OpenAIEmbeddings,ChatOpenAI #LangChain kütüphanes
 from models import Document, DocumentChunk #models.py dosyasından Document ve DocumentChunk sınıflarını import ediyoruz. Bu sınıflar, veritabanındaki "documents" ve "document_chunks" tablolarını temsil eder ve SQLAlchemy ORM ile etkileşim kurmamızı sağlar.
 import os #Python'un standart kütüphanesinden os modülünü import ediyoruz. Bu modül, işletim sistemi ile etkileşim kurmamızı sağlar. Örneğin, ortam değişkenlerini okumak veya dosya yollarını yönetmek için kullanılır.
 from dotenv import load_dotenv #dotenv kütüphanesinden load_dotenv fonksiyonunu import ediyoruz. Bu fonksiyon, .env dosyasındaki ortam değişkenlerini yüklememizi sağlar. Böylece, API anahtarları veya veritabanı bağlantı bilgileri gibi hassas verileri kod içinde açıkça yazmak yerine, güvenli bir şekilde yönetebiliriz.
-import openai
 from langchain_core.prompts import ChatPromptTemplate
 from pypdf import PdfReader
 from docx import Document as DocxDocument
 import io
+
 
 
 load_dotenv()
@@ -17,40 +17,6 @@ embeddings_model = OpenAIEmbeddings (
     model = "text-embedding-3-small",
     openai_api_key = os.getenv("OPENAI_API_KEY") #Ortam değişkenlerinden OPENAI_API_KEY değerini alır. Bu, OpenAI API'sine erişim sağlamak için gerekli olan gizli anahtardır. os.getenv() fonksiyonu, belirtilen ortam değişkeninin değerini döndürür. Eğer değişken tanımlı değilse None döner.
 )
-
-def process_and_store_document(db: Session, filename: str, content: str):
-    # 1. Adım: Dokümanı Ana Tabloya Kaydet
-    db_document = Document(filename=filename) #Yeni bir Document nesnesi oluşturur ve filename parametresini atar. Bu nesne, veritabanındaki "documents" tablosuna karşılık gelir.
-    db.add(db_document) #Oluşturulan Document nesnesini veritabanına ekler. Ancak henüz veritabanına yazılmaz; bu işlem commit() çağrıldığında gerçekleşir.
-    db.commit() #Bekleyen işlemleri onaylar ve veritabanına kalıcı olarak yazar. Bu noktada, db_document nesnesi veritabanına kaydedilir ve ona bir id atanır.
-    db.refresh(db_document) #Veritabanına kaydedilen db_document nesnesini günceller. Bu, veritabanı tarafından otomatik olarak atanan id ve created_at gibi alanların db_document nesnesine yansıtılmasını sağlar.
-
-   # 2. Adım: Metni Parçalara Ayır (Chunking)
-    text_splitter =  RecursiveCharacterTextSplitter(
-        chunk_size = 400, #Her bir parçanın (chunk) maksimum karakter sayısı. Örneğin 4000 karakterlik bir paragrafı 400'er karakterlik 10 parçaya böler.
-        chunk_overlap= 50, #Parçalar arasında kaç karakterlik örtüşme (overlap) olacağını belirler. Örneğin bir parçanın son 50 karakteri, bir sonraki parçanın ilk 50 karakteri ile aynı olur. Bu, bağlamın korunmasına yardımcı olur.
-        length_function=len, #Parçalama işlemi sırasında karakter sayısını ölçmek için Python'un built-in len() fonksiyonunu kullanır.
-        is_separator_regex=False, #Parçalama sırasında özel bir ayırıcı (separator) regex kullanıp kullanmayacağını belirler. False ise, metni sadece karakter sayısına göre böler.
-   )
-    chunks = text_splitter.split_text(content) #split_text() fonksiyonu, ham metni alır ve belirlenen chunk_size ve chunk_overlap parametrelerine göre metni parçalara böler. Sonuç olarak, her bir parça (chunk) ayrı bir string olarak chunks listesinde saklanır.
-
-    # 3. Adım: Her Parça İçin Embedding Üret ve Veritabanına Ekle
-    for index, chunk_content in enumerate(chunks): #
-        # Embedding üretimi (1536 boyutlu vektör döner)
-        vector = embeddings_model.embed_query(chunk_content) #embed_query() fonksiyonu, verilen metin parçasını (chunk_content) alır ve OpenAI'nin embedding modelini kullanarak bu metni 1536 boyutlu bir vektöre dönüştürür. Bu vektör, metnin anlamını sayısal bir formatta temsil eder ve benzerlik aramaları için kullanılabilir.
-
-        db_chunk = DocumentChunk(
-            document_id=db_document.id, #Bu parçanın hangi ana dokümana ait olduğunu belirtir. db_document.id, veritabanına kaydedilen ana dokümanın benzersiz kimlik numarasıdır.
-            content=chunk_content, #Parçalanmış metin içeriği. Bu, kullanıcının yüklediği ham metnin bir parçasıdır.
-            chunk_index=index, #Parçanın sıralamadaki konumu. enumerate() fonksiyonu sayesinde her bir parçaya otomatik olarak bir index atanır.
-            embedding=vector #Üretilen embedding vektörü. Bu vektör, metin parçasının anlamını sayısal olarak temsil eder ve veritabanında saklanır.
-        )
-        db.add(db_chunk)
-
-    db.commit()
-    db.refresh(db_document) #Veritabanına kaydedilen db_document nesnesini günceller. Bu, veritabanı tarafından otomatik olarak atanan id ve created_at gibi alanların db_document nesnesine yansıtılmasını sağlar.
-
-    return db_document
 
 def search_documents(db: Session, query: str, top_k: int = 3):
     """
@@ -168,7 +134,7 @@ def process_and_store_file_document_with_pages(db: Session, filename: str, file_
     db.refresh(db_document)
     return db_document
 
-def extract_text_with_pages(filename: str, file_bytes: bytes):
+def extract_text_with_pages(filename: str, file_bytes: bytes): #bytes ile alıyoruz çünkü dosya içeriği bellekte bayt olarak geliyor
     """
     Dosya türüne göre metni ve ait olduğu sayfa/bölüm numaralarını liste olarak döner.
     Her eleman: {"content": str, "page_number": int}
@@ -178,7 +144,7 @@ def extract_text_with_pages(filename: str, file_bytes: bytes):
 
     # 1. PDF Dosyaları İçin (Sayfa bazlı takip)
     if ext == "pdf":
-        pdf_file = io.BytesIO(file_bytes)
+        pdf_file = io.BytesIO(file_bytes) #bellekte bulunan baytları bir dosya nesnesine dönüştürüyoruz
         reader = PdfReader(pdf_file)
         for idx, page in enumerate(reader.pages, start=1):
             text = page.extract_text()
@@ -204,12 +170,25 @@ def extract_text_with_pages(filename: str, file_bytes: bytes):
 
     # 3. Düz Metin (TXT) Dosyaları İçin
     elif ext == "txt":
+
         try:
             text = file_bytes.decode("utf-8")
         except UnicodeDecodeError:
             text = file_bytes.decode("latin-1")
-        pages_data.append({"content": text, "page_number": 1})
 
+        page_approx = 1
+        chunk_size = 1500 
+
+        for i in range(0, len(text), chunk_size):
+            chunk = text[i:i + chunk_size]
+
+            if chunk.strip():
+                pages_data.append({
+                    "content": chunk,
+                    "page_number": page_approx
+                })
+
+                page_approx += 1
     else:
         raise ValueError("Desteklenmeyen dosya formatı.")
 

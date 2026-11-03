@@ -235,9 +235,7 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="text-[10px] text-slate-500 border-t border-slate-800 pt-3 text-center">
-          FastAPI + pgvector + OpenAI + Next.js
-        </div>
+        
       </aside>
 
       {/* ANA EKRAN PANELİ */}

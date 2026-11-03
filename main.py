@@ -3,7 +3,7 @@ from fastapi import FastAPI, Depends,HTTPException,status,UploadFile, File #fast
 import models  # Modellerin Base tarafından tanınması için import ediyoruz
 from schemas import DocumentCreate,SearchRequest,SearchResponse,AskRequest, AskResponse,DocumentListItem,DocumentDetailResponse,ChunkSchema
 from sqlalchemy.orm import Session
-from services import process_and_store_document, process_and_store_file_document_with_pages,search_documents,answer_question,get_all_documents, delete_document_by_id,get_document_by_id
+from services import process_and_store_file_document_with_pages,search_documents,answer_question,get_all_documents, delete_document_by_id,get_document_by_id
 from fastapi.middleware.cors import CORSMiddleware
 
 # Tablolar veritabanında yoksa oluştur
@@ -40,7 +40,7 @@ def list_documents(db: Session = Depends(get_db)):
     documents = get_all_documents(db)
     return documents
 
-@app.get("/documents/{document_id}", response_model=DocumentDetailResponse)
+@app.get("/documents/{document_id}", response_model=DocumentDetailResponse) #kırmızı olan doc_id path parameterdir, değişken bir yapıda olduğu süslü parantezle belirtilir.
 def get_document_detail(document_id: int, db: Session = Depends(get_db)):
     """
     Belirli bir ID'ye sahip dokümanın ana bilgilerini ve parçalanmış metin içeriklerini döner.
@@ -54,7 +54,7 @@ def get_document_detail(document_id: int, db: Session = Depends(get_db)):
     return document
 
 @app.post("/documents/", status_code=status.HTTP_201_CREATED)
-async def upload_any_document(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_any_document(file: UploadFile = File(...), db: Session = Depends(get_db)): #File(...): FastAPI'ye "Bu veriyi URL'den veya JSON gövdesinden değil, HTTP isteğinin Form Verisinden (multipart/form-data) çek" talimatını verir. İçindeki ... (üç nokta) sembolü Python'da Ellipsis olarak bilinir ve Pydantic/FastAPI dünyasında "Bu alan kesinlikle zorunludur" anlamına gelir.
     """
     Kullanıcının yüklediği PDF, DOCX veya TXT dosyalarını alır, metni ayıklar ve vektörleştirerek kaydeder.
     """
@@ -67,7 +67,7 @@ async def upload_any_document(file: UploadFile = File(...), db: Session = Depend
     
     try:
         # Dosya içeriğini bellekte bayt olarak oku
-        file_bytes = await file.read()
+        file_bytes = await file.read() #Dosyayı belleğe okuma (read()) işlemi zaman alacaktır. await kelimesi Python'a şunu söyler: "Dosyanın baytlara (bytes) çevrilme işlemini başlat. Bu satırda işlemi duraklat (pause), git başka işlerin varsa onları hallet. Dosyanın okunması tamamen bittiğinde beni uyandır ve bir sonraki satırdan kod işlemeye devam etsin."
         
         # Servis katmanını tetikle
         db_document = process_and_store_file_document_with_pages(
@@ -82,7 +82,7 @@ async def upload_any_document(file: UploadFile = File(...), db: Session = Depend
             "filename": db_document.filename
         }
 
-    except Exception as e:
+    except Exception as e: #Ne tür bir hata çıkarsa çıksın (Exception), bunu yakala ve 'e' isimli değişkene hapset"
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
