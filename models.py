@@ -1,6 +1,6 @@
 from datetime import datetime
 from database import Base
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text,Column
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from pgvector.sqlalchemy import Vector  # pgvector SQLAlchemy entegrasyonu
 
@@ -39,3 +39,16 @@ class DocumentChunk(Base):
 
     # İlişki tanımı
     document: Mapped["Document"] = relationship(back_populates="chunks")
+
+class User(Base):
+    __tablename__ = "users" # PostgreSQL'de tablo isimlerinde genelde küçük harf tercih edilir
+
+    # ID için performans açısından genelde otomatik artan int veya UUID tercih edilir
+    id: Mapped[int] = mapped_column(primary_key=True, index=True, autoincrement=True)
+    
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    
+    # Bcrypt hashleri genelde 60 karakterdir, Text veya String kullanılabilir
+    hashed_password: Mapped[str] = mapped_column(Text, nullable=False)
+    
+    role: Mapped[str] = mapped_column(String(50), nullable=False, default="user")

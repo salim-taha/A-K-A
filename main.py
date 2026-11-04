@@ -1,10 +1,11 @@
 from database import Base, engine, get_db  #Base ve engine'i database.py'den import ediyoruz
 from fastapi import FastAPI, Depends,HTTPException,status,UploadFile, File #fastapi kütüphanesini import ediyoruz
 import models  # Modellerin Base tarafından tanınması için import ediyoruz
-from schemas import DocumentCreate,SearchRequest,SearchResponse,AskRequest, AskResponse,DocumentListItem,DocumentDetailResponse,ChunkSchema
+from schemas import DocumentCreate,SearchRequest,SearchResponse,AskRequest, AskResponse,DocumentListItem,DocumentDetailResponse,ChunkSchema,Token
 from sqlalchemy.orm import Session
 from services import process_and_store_file_document_with_pages,search_documents,answer_question,get_all_documents, delete_document_by_id,get_document_by_id
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordRequestForm
 
 # Tablolar veritabanında yoksa oluştur
 Base.metadata.create_all(bind=engine) #Bu satır, veritabanında tabloların oluşturulmasını sağlar. Eğer tablolar zaten varsa, bu satır herhangi bir değişiklik yapmaz.
@@ -23,6 +24,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.post("/auth/register")
+
+app.post("/auth/login", response_model=Token, tags="Authentications" )
+def login(form_data:OAuth2PasswordRequestForm= Depends(), db:Session= Depends(get_db))
 
 @app.get("/")
 def read_root():

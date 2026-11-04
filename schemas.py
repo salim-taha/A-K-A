@@ -60,3 +60,11 @@ class AskResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class UserCreate(BaseModel):
+    password: str
+    email: str
+
+class Token(BaseModel):
+    access_token:str
+    token_type:str
