@@ -92,6 +92,7 @@ def answer_question(db: Session, query: str, top_k: int = 3):
         "answer": answer_text,
         "sources": relevant_chunks
     }
+
 def process_and_store_file_document_with_pages(db: Session, filename: str, file_bytes: bytes):
     """
     Sayfa bilgileri korunaraka dokümanı parçalayan ve veritabanına kaydeden fonksiyon.
@@ -193,8 +194,6 @@ def extract_text_with_pages(filename: str, file_bytes: bytes): #bytes ile alıyo
         raise ValueError("Desteklenmeyen dosya formatı.")
 
     return pages_data
-
-
 
 def get_all_documents(db: Session):
     """
