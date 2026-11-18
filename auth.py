@@ -1,8 +1,12 @@
 from datetime import timedelta,datetime,timezone
 import jwt
-from passlib.context import CryptContext
+import bcrypt
 import os
 from dotenv import load_dotenv
+import jwt
+from jwt.exceptions import InvalidTokenError
+from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends, HTTPException, status
 
 load_dotenv()
 
@@ -10,15 +14,30 @@ SECRET_KEY = os.getenv("AUTH_SECRET_KEY")
 ALGORITHM = "HS256"
 ACCSESS_TOKEN_EXPIRE_MINUTES = 60
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
-pwd_content = CryptContext(schemes=["bcrypt"], deprecated ="auto")
 
-def verify_password (plain_password: str , hashed_password: str ) -> bool: #girilen şifreyle sistemdekini karşılaştırır
-    return pwd_content.verify(plain_password,hashed_password)
 
-def get_password_hash (password: str) -> str:
-    return pwd_content.hash(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Girilen şifre ile veritabanındaki şifrelenmiş (hash) şifreyi karşılaştırır."""
+    # Bcrypt'in 72 karakter sınırına karşı güvenlik önlemi
+    safe_password = plain_password[:72].encode('utf-8')
+    hashed_bytes = hashed_password.encode('utf-8')
+    
+    return bcrypt.checkpw(safe_password, hashed_bytes)
+
+def get_password_hash(password: str) -> str:
+    """Yeni şifreyi geri döndürülemez şekilde şifreler (Hash oluşturur)."""
+    # Bcrypt'in 72 karakter sınırına karşı güvenlik önlemi
+    safe_password = password[:72].encode('utf-8')
+    
+    # Modern güvenlik standardı: Rastgele bir 'tuz' (salt) üret ve şifreyle birleştir
+    salt = bcrypt.gensalt()
+    hashed_bytes = bcrypt.hashpw(safe_password, salt)
+    
+    return hashed_bytes.decode('utf-8')
 
 def create_accses_token (data:dict) -> str:
     to_encode = data.copy()
@@ -29,6 +48,38 @@ def create_accses_token (data:dict) -> str:
     encoded_jwt= jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
     return encoded_jwt
+
+def get_current_admin_user (token: str = Depends(oauth2_scheme)):
+    crediantal_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="kimlik doğrulanamadı veya oturum süresi dolmuş",
+        headers={"WWW-Authenticate":"Bearer"}
+    )
+
+    try:
+        secret_key = os.getenv("AUTH_SECRET_KEY")
+        payload = jwt.decode(token, secret_key, algorithms= ["HS256"])
+
+        role: str = payload.get("role")
+        email: str = payload.get("sub")
+
+        if role is None or email is None:
+            raise crediantal_exception
+    except InvalidTokenError:
+        raise crediantal_exception
+
+    if role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Güvenlik ihlali: Bu Bu işlem için Yönetici (Admin) yetkisine sahip olmalısınız! "
+        )
+
+    return payload
+    
+        
+
+
+
 
 
 

@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import List 
 from pydantic import BaseModel
+from enum import Enum
 
 # --- 1. ORTAK CHUNK (PARÇA) ŞEMASI ---
 # Tüm detay ve kaynak gösterimlerinde ortak olarak kullanılan tek parça modeli
@@ -68,3 +69,12 @@ class UserCreate(BaseModel):
 class Token(BaseModel):
     access_token:str
     token_type:str
+
+class UserRole(str,Enum):
+    super_admin = "super admin"
+    admin = "admin"
+    editor = "editor"
+    user = "user"
+
+class RoleUpdate(BaseModel):
+    new_role: UserRole

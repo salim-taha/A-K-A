@@ -37,7 +37,7 @@ def search_documents(db: Session, query: str, top_k: int = 3):
 # OpenAI Chat modelini tanımlıyoruz (Hızlı ve maliyetsiz olduğu için gpt-4o-mini idealdir)
 chat_model = ChatOpenAI(
     model="gpt-4o-mini",
-    temperature=0.0,  # Düşük temperature, modelin uydurma (hallüsinasyon) yapmasını engeller, metne sadık kalır
+    temperature=0.5,  # Düşük temperature, modelin uydurma (hallüsinasyon) yapmasını engeller, metne sadık kalır
     openai_api_key=os.getenv("OPENAI_API_KEY")
 )
 
@@ -92,7 +92,6 @@ def answer_question(db: Session, query: str, top_k: int = 3):
         "answer": answer_text,
         "sources": relevant_chunks
     }
-
 def process_and_store_file_document_with_pages(db: Session, filename: str, file_bytes: bytes):
     """
     Sayfa bilgileri korunaraka dokümanı parçalayan ve veritabanına kaydeden fonksiyon.
@@ -107,8 +106,8 @@ def process_and_store_file_document_with_pages(db: Session, filename: str, file_
     pages_data = extract_text_with_pages(filename, file_bytes)
     
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=400,
-        chunk_overlap=50,
+        chunk_size=500,
+        chunk_overlap=100,
         length_function=len,
     )
 
@@ -194,6 +193,8 @@ def extract_text_with_pages(filename: str, file_bytes: bytes): #bytes ile alıyo
         raise ValueError("Desteklenmeyen dosya formatı.")
 
     return pages_data
+
+
 
 def get_all_documents(db: Session):
     """

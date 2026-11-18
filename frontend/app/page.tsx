@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import {
   api,
   DocumentListItem,
@@ -18,12 +19,10 @@ import {
   BookOpen,
   Info,
   Loader2,
-  Sparkles,
   Layers,
+  LogOut,
 } from "lucide-react";
-
 import Image from "next/image";
-
 
 interface Message {
   role: "user" | "assistant";
@@ -32,42 +31,72 @@ interface Message {
 }
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<"chat" | "search" | "detail">(
-    "chat"
-  );
+  const [userEmail, setUserEmail] = useState<string>("");
+  const [userRole, setUserRole] = useState<string>("");
+  const router = useRouter();
+
+  // Authentication & Yetki State'i
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // Sekme (Tab) ve Veri State'leri
+  const [activeTab, setActiveTab] = useState<"chat" | "search" | "detail">("chat");
   const [documents, setDocuments] = useState<DocumentListItem[]>([]);
   const [uploading, setUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
 
-  // Chat state
+  // Chat State
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputQuery, setInputQuery] = useState("");
   const [asking, setAsking] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Search state
+  // Arama (Search) State
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
 
-  // Detail state
+  // Detay (Detail) State
   const [selectedDocId, setSelectedDocId] = useState<number | null>(null);
   const [docDetail, setDocDetail] = useState<DocumentDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
+  // Sayfa yüklendiğinde Token kontrolü yap (Yetki Yoksa Login'e fırlat)
   useEffect(() => {
-    loadDocuments();
-  }, []);
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+      router.push("/login");
+    } else {
+      setIsAuthenticated(true);
+      loadDocuments();
+      
+      // Token'ı çöz ve içindeki bilgileri (email ve rol) state'e kaydet
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setUserEmail(payload.sub);   // sub = e-posta adresimiz
+        setUserRole(payload.role);   // role = 'user' veya 'admin'
+      } catch (err) {
+        console.error("Token çözülemedi:", err);
+      }
+    }
+  }, [router]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Çıkış Yap Fonksiyonu
+  const handleLogout = () => {
+    localStorage.removeItem("access_token");
+    router.push("/login");
+  };
+
   const loadDocuments = async () => {
     try {
       const docs = await api.getDocuments();
       setDocuments(docs);
-    } catch (err) {
+    } catch (err: any) {
+      // Eğer API 401 (Unauthorized) dönerse token geçersizdir, çıkış yaptır.
+      if (err.message.includes("401")) handleLogout();
       console.error(err);
     }
   };
@@ -81,6 +110,7 @@ export default function Home() {
       await loadDocuments();
       alert("Doküman başarıyla işlendi, sayfalandırıldı ve vektörleştirildi!");
     } catch (err: any) {
+      if (err.message.includes("401")) handleLogout();
       alert(err.message || "Yükleme başarısız.");
     } finally {
       setUploading(false);
@@ -95,6 +125,7 @@ export default function Home() {
       await loadDocuments();
       if (docDetail?.id === id) setDocDetail(null);
     } catch (err: any) {
+      if (err.message.includes("401")) handleLogout();
       alert(err.message);
     }
   };
@@ -119,6 +150,7 @@ export default function Home() {
         },
       ]);
     } catch (err: any) {
+      if (err.message.includes("401")) handleLogout();
       setMessages((prev) => [
         ...prev,
         {
@@ -139,6 +171,7 @@ export default function Home() {
       const results = await api.search(searchQuery);
       setSearchResults(results);
     } catch (err: any) {
+      if (err.message.includes("401")) handleLogout();
       alert(err.message);
     } finally {
       setSearching(false);
@@ -153,33 +186,54 @@ export default function Home() {
       setDocDetail(detail);
       setActiveTab("detail");
     } catch (err: any) {
+      if (err.message.includes("401")) handleLogout();
       alert(err.message);
     } finally {
       setLoadingDetail(false);
     }
   };
 
+  // Kullanıcı doğrulanmadıysa (sayfa render edilirken kısacık bir anlığına) beyaz ekran/flicker engelleme
+  if (!isAuthenticated) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-redrose-black">
+        <Loader2 className="w-8 h-8 animate-spin text-redrose-red" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-redrose-black text-redrose-text font-sans">
-      {/* SIDEBAR: DOKÜMAN YÖNETİMİ */}
+      {/* SIDEBAR: DOKÜMAN YÖNETİMİ & KULLANICI */}
       <aside className="w-80 border-r border-redrose-border bg-redrose-dark flex flex-col justify-between p-4 shadow-[0_0_15px_rgba(230,0,0,0.1)]">
-        <div>
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Logo Alanı */}
           <div className="flex items-center gap-2 mb-6">
-            {/* Logo Görseli */}
-            <div className="shrink-0 overflow-hidden rounded-md shadow-[0_0_15px_rgba(229,26,36,0.3)]">
+            <div className="shrink-0 rounded-full shadow-[0_0_15px_rgba(229,26,36,0.3)] bg-redrose-red w-[52px] h-[52px] flex items-center justify-center">
               <Image 
-                src="/redrose-logo.png" 
+                src="/redrose-logo-transparent.png" 
                 alt="RedRose Logo" 
                 width={52} 
                 height={52} 
-                className="object-cover rounded-md"
+                // bg-white ve rounded-full ile silinen iç kısımları beyaz yuvarlakla dolduruyoruz
+                className="object-contain bg-white rounded-full" 
               />
             </div>
-            {/* İsteğe bağlı başlık (Logonun içinde zaten RedRose yazdığı için burayı daha sade tutabilirsin) */}
-              <div className="flex flex-col">
-                <h1 className="font-bold text-lg leading-tight text-redrose-text">RedRose</h1>
-                <p className="text-[11px] text-redrose-subtext tracking-wide">AI KNOWLEDGE ASSISTANT</p>
+            <div className="flex flex-col">
+              <h1 className="font-bold text-sm leading-tight text-redrose-text truncate max-w-[150px]">
+                {userEmail ? userEmail.split('@')[0] : "Kullanıcı"}
+              </h1>
+              <div className="flex gap-2 items-center mt-0.5">
+                <p className="text-[10px] text-redrose-subtext tracking-wide">AI ASSISTANT</p>
+                <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
+                  userRole === "admin" 
+                    ? "bg-redrose-red/20 text-redrose-red border border-redrose-red/30" 
+                    : "bg-gray-700/50 text-gray-300 border border-gray-600/50"
+                }`}>
+                  {userRole || "USER"}
+                </span>
               </div>
+            </div>
           </div>
 
           {/* Dosya Yükleme Paneli */}
@@ -208,11 +262,11 @@ export default function Home() {
           </div>
 
           {/* Yüklü Dokümanlar Listesi */}
-          <div>
+          <div className="flex-1 overflow-hidden flex flex-col">
             <span className="text-xs font-semibold text-redrose-subtext block mb-3">
               YÜKLÜ DOKÜMANLAR ({documents.length})
             </span>
-            <div className="space-y-2 max-h-[calc(100vh-320px)] overflow-y-auto pr-1">
+            <div className="space-y-2 overflow-y-auto pr-1 flex-1">
               {documents.length === 0 ? (
                 <p className="text-xs text-redrose-subtext italic">
                   Henüz doküman yüklenmedi.
@@ -245,9 +299,21 @@ export default function Home() {
             </div>
           </div>
         </div>
+
+        {/* Çıkış Yap Paneli (Sidebar En Alt) */}
+        <div className="pt-4 border-t border-redrose-border mt-4">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-transparent border border-redrose-border hover:border-redrose-red hover:text-redrose-red text-redrose-subtext text-xs font-medium rounded-lg transition-colors group"
+          >
+            <LogOut className="w-4 h-4 group-hover:text-redrose-red transition-colors" />
+            Çıkış Yap
+          </button>
+        </div>
       </aside>
 
-      {/* ANA EKRAN PANELİ */}
+      {/* ANA EKRAN PANELİ (Chat / Arama / Detay) */}
+      {/* ... (Bu bölümdeki eski kodların 1:1 aynı, sadece logo kısmını yukarıda düzelttim) ... */}
       <main className="flex-1 flex flex-col bg-redrose-black">
         {/* Üst Sekme Başlıkları */}
         <header className="border-b border-redrose-border px-6 py-3 flex items-center justify-between bg-redrose-dark/50">

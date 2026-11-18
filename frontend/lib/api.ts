@@ -1,5 +1,6 @@
 const API_BASE_URL = "http://127.0.0.1:8000";
 
+// --- MEVCUT TİP TANIMLAMALARIN ---
 export interface DocumentListItem {
   id: number;
   filename: string;
@@ -31,58 +32,87 @@ export interface AskResponse {
   sources: ChunkDetail[];
 }
 
+// --- YENİ: GÜVENLİK VE FETCH YARDIMCISI ---
+
+/**
+ * Tarayıcının hafızasından token'ı alır ve her isteğin başlığına ekler.
+ */
+const getAuthHeaders = (): HeadersInit => {
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("access_token");
+    if (token) {
+      return { Authorization: `Bearer ${token}` };
+    }
+  }
+  return {};
+};
+
+/**
+ * Standart fetch işlemini sarmalayan, token ekleyen ve 401 hatalarını yakalayan fonksiyon.
+ */
+async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
+  const headers = {
+    ...getAuthHeaders(),
+    ...(options.headers || {}),
+  };
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers,
+  });
+
+  // Eğer token geçersizse page.tsx'in yakalayıp login'e atması için 401 fırlatıyoruz
+  if (response.status === 401) {
+    throw new Error("401 Unauthorized");
+  }
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Sunucu hatası.");
+  }
+
+  return response.json();
+}
+
+// --- GÜNCELLENMİŞ API İŞLEMLERİ ---
+
 export const api = {
   async uploadDocument(file: File) {
     const formData = new FormData();
     formData.append("file", file);
-    const res = await fetch(`${API_BASE_URL}/documents/`, {
+    return fetchWithAuth("/documents/", {
       method: "POST",
       body: formData,
     });
-    if (!res.ok) {
-      const error = await res.json();
-      throw new Error(error.detail || "Dosya yüklenirken bir hata oluştu.");
-    }
-    return res.json();
   },
 
   async getDocuments(): Promise<DocumentListItem[]> {
-    const res = await fetch(`${API_BASE_URL}/documents/`);
-    if (!res.ok) throw new Error("Doküman listesi alınamadı.");
-    return res.json();
+    return fetchWithAuth("/documents/");
   },
 
   async getDocumentDetail(id: number): Promise<DocumentDetail> {
-    const res = await fetch(`${API_BASE_URL}/documents/${id}`);
-    if (!res.ok) throw new Error("Doküman detayları alınamadı.");
-    return res.json();
+    return fetchWithAuth(`/documents/${id}`);
   },
 
   async deleteDocument(id: number) {
-    const res = await fetch(`${API_BASE_URL}/documents/${id}`, {
+    return fetchWithAuth(`/documents/${id}`, {
       method: "DELETE",
     });
-    if (!res.ok) throw new Error("Doküman silinemedi.");
-    return res.json();
   },
 
   async search(query: string, topK: number = 3): Promise<SearchResult[]> {
-    const res = await fetch(`${API_BASE_URL}/search/`, {
+    return fetchWithAuth("/search/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query, top_k: topK }),
     });
-    if (!res.ok) throw new Error("Arama yapılırken hata oluştu.");
-    return res.json();
   },
 
   async ask(query: string, topK: number = 3): Promise<AskResponse> {
-    const res = await fetch(`${API_BASE_URL}/ask/`, {
+    return fetchWithAuth("/ask/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query, top_k: topK }),
     });
-    if (!res.ok) throw new Error("Soru cevaplanırken bir hata oluştu.");
-    return res.json();
   },
 };
