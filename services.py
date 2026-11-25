@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session #SQLAlchemy'nin Session sınıfını import ediyoruz. Bu sınıf, veritabanı ile etkileşim kurmamızı sağlar. Örneğin, veri ekleme, silme, güncelleme ve sorgulama işlemlerini gerçekleştirmek için kullanılır.
+from sqlalchemy.orm import Session, joinedload #SQLAlchemy'nin Session sınıfını import ediyoruz. Bu sınıf, veritabanı ile etkileşim kurmamızı sağlar. Örneğin, veri ekleme, silme, güncelleme ve sorgulama işlemlerini gerçekleştirmek için kullanılır.
 from langchain_text_splitters import RecursiveCharacterTextSplitter #LangChain kütüphanesinden RecursiveCharacterTextSplitter sınıfını import ediyoruz. Bu sınıf, uzun metinleri daha küçük parçalara (chunk) bölmek için kullanılır. Özellikle RAG (Retrieval-Augmented Generation) sistemlerinde, büyük belgeleri yönetilebilir parçalara ayırmak için idealdir.
 from langchain_openai import OpenAIEmbeddings,ChatOpenAI #LangChain kütüphanesinden OpenAIEmbeddings sınıfını import ediyoruz. Bu sınıf, metinleri vektörlere dönüştürmek için OpenAI'nin embedding modellerini kullanır. Vektörler, metinlerin anlamını sayısal bir formatta temsil eder ve benzerlik aramaları için kullanılır.
 from models import Document, DocumentChunk #models.py dosyasından Document ve DocumentChunk sınıflarını import ediyoruz. Bu sınıflar, veritabanındaki "documents" ve "document_chunks" tablolarını temsil eder ve SQLAlchemy ORM ile etkileşim kurmamızı sağlar.
@@ -9,6 +9,8 @@ from pypdf import PdfReader
 from docx import Document as DocxDocument
 import io
 
+import models
+
 
 
 load_dotenv()
@@ -18,16 +20,21 @@ embeddings_model = OpenAIEmbeddings (
     openai_api_key = os.getenv("OPENAI_API_KEY") #Ortam değişkenlerinden OPENAI_API_KEY değerini alır. Bu, OpenAI API'sine erişim sağlamak için gerekli olan gizli anahtardır. os.getenv() fonksiyonu, belirtilen ortam değişkeninin değerini döndürür. Eğer değişken tanımlı değilse None döner.
 )
 
-def search_documents(db: Session, query: str, top_k: int = 3):
+def search_documents(db: Session, query: str, top_k: int = 3,department: str | None = None):
     """
     Kullanıcı sorgusuna en benzer metin parçalarını pgvector kullanarak veritabanından bulur.
     """
     # 1. Adım: Kullanıcının yazdığı metin sorusunu OpenAI embedding modeline gönderip 1536 boyutlu sayısal vektör elde ediyoruz.
     query_vector = embeddings_model.embed_query(query)
+
+    db_query = db.query(DocumentChunk).options(joinedload(DocumentChunk.document)).join(Document)
+
+    if department:
+        db_query = db_query.filter(Document.department.in_([department, "Genel"]))
     
     # 2. Adım: pgvector'ün sağladığı .cosine_distance() fonksiyonu ile veritabanındaki tüm chunk'ları 
     # sorgu vektörüne olan mesafelerine göre küçükten büyüğe (en yakından en uzağa) sıralıyoruz.
-    results = db.query(DocumentChunk).order_by(
+    results = db_query.order_by(
         DocumentChunk.embedding.cosine_distance(query_vector)
     ).limit(top_k).all()  # En yüksek benzerliğe sahip ilk 'top_k' kadar sonucu seçiyoruz.
     
@@ -41,13 +48,13 @@ chat_model = ChatOpenAI(
     openai_api_key=os.getenv("OPENAI_API_KEY")
 )
 
-def answer_question(db: Session, query: str, top_k: int = 3):
+def answer_question(db: Session, query: str, top_k: int = 3, department: str = "Genel"):
     """
     Kullanıcının sorusuna, veritabanındaki ilgili dokümanları bağlam olarak kullanarak 
     ve kullanıcının sorgu diline uygun olarak yanıt üretir (Çok Dilli Destek).
     """
     # 1. Adım: Benzerlik araması yaparak en ilgili metin parçalarını (context) buluyoruz
-    relevant_chunks = search_documents(db=db, query=query, top_k=top_k)
+    relevant_chunks = search_documents(db=db, query=query, top_k=top_k, department=department)
     
     if not relevant_chunks:
         return {
@@ -92,12 +99,12 @@ def answer_question(db: Session, query: str, top_k: int = 3):
         "answer": answer_text,
         "sources": relevant_chunks
     }
-def process_and_store_file_document_with_pages(db: Session, filename: str, file_bytes: bytes):
+def process_and_store_file_document_with_pages(db: Session, filename: str, file_bytes: bytes, department: str = "Genel"):
     """
     Sayfa bilgileri korunaraka dokümanı parçalayan ve veritabanına kaydeden fonksiyon.
     """
     # 1. Ana dokümanı kaydet
-    db_document = Document(filename=filename)
+    db_document = Document(filename=filename, department= department)
     db.add(db_document)
     db.commit()
     db.refresh(db_document)
@@ -194,13 +201,14 @@ def extract_text_with_pages(filename: str, file_bytes: bytes): #bytes ile alıyo
 
     return pages_data
 
-
-
-def get_all_documents(db: Session):
-    """
-    Veritabanına yüklenmiş olan tüm ana dokümanların listesini döner.
-    """
-    return db.query(Document).all()
+   
+def get_all_documents(db: Session, department: str | None = None):
+    query = db.query(models.Document)
+    
+    if department:
+        query = query.filter(models.Document.department.in_([department, "Genel"]))
+        
+    return query.all()
 
 def delete_document_by_id(db: Session, document_id: int):
     """

@@ -19,6 +19,8 @@ class Document(Base):
         cascade="all, delete-orphan" #all ile tüm ilişik parçalara erişilir, delete-orphan ile ana doküman silindiğinde ilişkili parçalar da silinir python bazında gerçekleşir.
     )
 
+    department: Mapped[str] = mapped_column(String(50),default="Genel")
+
 
 class DocumentChunk(Base):
     __tablename__ = "document_chunks"
@@ -40,6 +42,15 @@ class DocumentChunk(Base):
     # İlişki tanımı
     document: Mapped["Document"] = relationship(back_populates="chunks")
 
+    @property
+    def document_filename(self) -> str:
+        return self.document.filename if self.document else "Bilinmeyen Döküman"
+
+    @property
+    def department(self) -> str:
+        return self.document.department if self.document else "Genel"
+
+    
 class User(Base):
     __tablename__ = "users" # PostgreSQL'de tablo isimlerinde genelde küçük harf tercih edilir
 
@@ -52,3 +63,6 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(Text, nullable=False)
     
     role: Mapped[str] = mapped_column(String(50), nullable=False, default="user")
+
+    department: Mapped[str] = mapped_column(String(50),default="Genel")
+

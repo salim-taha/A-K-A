@@ -23,6 +23,7 @@ class DocumentListItem(BaseModel):
     id: int
     filename: str
     created_at: datetime
+    department: str
 
     class Config:
         from_attributes = True
@@ -46,6 +47,9 @@ class SearchResponse(BaseModel):
     document_id: int
     content: str
     chunk_index: int
+    page_number: int | None = None
+    department: str
+    document_filename: str
 
     class Config:
         from_attributes = True
@@ -62,9 +66,15 @@ class AskResponse(BaseModel):
     class Config:
         from_attributes = True
 
-class UserCreate(BaseModel):
-    password: str
-    email: str
+
+class Department(str, Enum):
+    genel = "Genel"
+    ik = "İK"
+    yazilim = "Yazılım"
+    finans = "Finans"
+    satis = "Satış"
+
+
 
 class Token(BaseModel):
     access_token:str
@@ -76,5 +86,18 @@ class UserRole(str,Enum):
     editor = "editor"
     user = "user"
 
+
 class RoleUpdate(BaseModel):
     new_role: UserRole
+
+class DepartmentUpdate(BaseModel):
+    new_dept: Department
+
+class UserCreate(BaseModel):
+    password: str
+    email: str
+    department: Department = Department.genel
+
+class PasswordReset(BaseModel):
+    new_password: str
+

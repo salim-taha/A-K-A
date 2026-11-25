@@ -5,6 +5,7 @@ export interface DocumentListItem {
   id: number;
   filename: string;
   created_at: string;
+  department: string;
 }
 
 export interface ChunkDetail {
@@ -16,6 +17,7 @@ export interface ChunkDetail {
 export interface DocumentDetail {
   id: number;
   filename: string;
+  department: string;
   created_at: string;
   chunks: ChunkDetail[];
 }
@@ -23,13 +25,16 @@ export interface DocumentDetail {
 export interface SearchResult {
   id: number;
   document_id: number;
-  content: string;
+  document_filename: string;
+  department: string;
   chunk_index: number;
+  page_number?: number;
+  content: string;
 }
 
 export interface AskResponse {
   answer: string;
-  sources: ChunkDetail[];
+  sources: SearchResult[];
 }
 
 // --- YENİ: GÜVENLİK VE FETCH YARDIMCISI ---
@@ -77,9 +82,10 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
 // --- GÜNCELLENMİŞ API İŞLEMLERİ ---
 
 export const api = {
-  async uploadDocument(file: File) {
+  async uploadDocument(file: File,department: string = "Genel") {
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("department", department);
     return fetchWithAuth("/documents/", {
       method: "POST",
       body: formData,
